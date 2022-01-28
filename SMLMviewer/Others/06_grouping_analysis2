@@ -1,0 +1,12 @@
+dir = getDirectory("Choose a Directory ");
+list = getFileList(dir);
+print(list.length);
+setBatchMode(true); 
+ for (i=0; i<list.length; i++) {
+        if (endsWith(list[i], "/")){
+		print(list[i]);
+		run("02 SMLM viewer v0 4 ", "title=[SMLM image #1] grid=5 gauss roi lut=[Red Hot] open=[C:\\Users\\643003\\Desktop\\grouping\\" + list[i] + "\\" + list[i] + ".loc]");        
+     	}
+ }
+setBatchMode(false);
+

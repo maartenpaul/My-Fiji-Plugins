@@ -1,0 +1,7 @@
+rawimage = getImageID();
+for (i=0; i<roiManager("count"); i++){
+	roiManager("select", i)	;
+	run("Duplicate...", "duplicate range=1-20000");
+	selectImage(rawimage);
+}
+ 

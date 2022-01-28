@@ -1,0 +1,145 @@
+// Count_Spots_PerCell
+//
+// Count spots per cell
+// Julie Nonnenkes
+// 3Ch Dapi, Green Red
+// Only count spots in red, use ch1 as maks for the nucleus
+//
+// Gert van Cappellen
+// 30-9-2015
+// Aangepast voor Quirine en Nathalie
+// 30-3-2016
+// Aangepast door Nathalie met watershed foci 16-8-2016
+
+macroName="Count_Spots_PerCell_Huang";
+if (isOpen("Log")) { 
+     selectWindow("Log"); 
+     run("Close"); 
+} 
+run("Clear Results");
+run("Close All");
+roiManager("Reset");
+run("Set Measurements...", "area mean standard centroid stack redirect=None decimal=3");
+print("Macro: "+macroName);
+print("---------------------------------------------------------");
+dir=getDirectory("Select the input (containing MaxProjections) directory");
+print("Input directory: "+dir);
+fileNames=getFileList(dir);
+Array.sort(fileNames);
+minCellSize=50;
+minSpotSize=0.05;
+maxSpotSize=5;
+
+File.makeDirectory(dir+"results");
+File.makeDirectory(dir+"resultImages");
+
+getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, second, msec);
+print("Start  Date: ",dayOfMonth,"-",month+1,"-",year,"   Time: ",hour,":",minute,":",second);
+print("Minimal cell size (um2): ",minCellSize);
+print("Minimal spot size (um2): ",minSpotSize);
+print("Maximal spot size (um2): ",maxSpotSize);
+for (ii=0; ii<fileNames.length; ii++){
+	if(startsWith(fileNames[ii],"MAX")){
+		open(dir+fileNames[ii]);
+		name=getTitle();
+		roiManager("Reset");
+		run("Duplicate...", "title=Mask duplicate");
+		Stack.setChannel(3);
+		run("Gaussian Blur...", "sigma=2 slice");
+		setAutoThreshold("Huang dark");
+		run("Analyze Particles...", "size="+minCellSize+"-Infinity display clear include add slice");
+
+		nrCells=roiManager("Count");
+		nrSpots=0;
+
+		cellNr=newArray(nrCells);
+		cellArea=newArray(nrCells);
+		cellMean=newArray(nrCells);
+		spotNr=newArray(nrCells);
+		spotArea=newArray(nrCells);
+		spotMeanInt=newArray(nrCells);
+
+		for(i=0; i<nrCells; i++){
+			cellNr[i]=i+1;
+			cellArea[i]=getResult("Area",i);
+			cellMean[i]=getResult("Mean",i);
+		}
+		
+		Stack.setChannel(2);
+		run("Median...", "radius=1 slice");
+		setAutoThreshold("MaxEntropy dark");
+		getThreshold(lower, upper);
+
+		for (i=0; i<nrCells; i++){
+			roiManager("Select",i);
+			Stack.setChannel(2);
+			setThreshold(lower, 255);
+			run("Analyze Particles...", "size="+minSpotSize+"-"+maxSpotSize+" display clear include slice");
+			spotNr[i]=nResults;
+			nrSpots=nrSpots+nResults;
+			spotArea[i]=0;
+			spotMeanInt[i]=0;
+			for (j=0; j<nResults; j++){
+				spotArea[i]+=getResult("Area",j);
+				spotMeanInt[i]+=getResult("Mean",j);
+			}
+		}
+
+		setThreshold(lower, 255);
+		run("Analyze Particles...", "size="+minSpotSize+"-"+maxSpotSize+" show=[Overlay Outlines] include slice");
+		Overlay.copy;
+		selectWindow(name);
+		Overlay.paste;
+		for (i=0; i<nrCells; i++){
+			roiManager("Select",i);
+			getSelectionBounds(x, y, width, height);
+			x=x+width/2;
+			y=y+height/2;
+			Overlay.addSelection("yellow");
+			Overlay.drawString(i+1, x, y)
+		}
+		run("Select None");
+
+		for (i=0; i<nrCells; i++){
+			roiManager("Select",i);
+			Stack.setChannel(2);
+			run("Duplicate...", "title=Mask duplicate");
+			setThreshold(lower, 255);
+			run("Analyze Particles...", "size="+minSpotSize+"-"+minCellSize+" show=Masks exclude include slice");
+			run("Grays");
+			run("Watershed");
+			run("Analyze Particles...", "size="+minSpotSize+"-"+maxSpotSize+" display clear include slice");
+			selectWindow("Mask of Mask");
+			close();
+			selectWindow("Mask");
+			close();
+			spotNr[i]=nResults;
+			nrSpots=nrSpots+nResults;
+		}
+		
+		saveAs("Tiff", dir+"resultImages\\"+name);
+		
+		run("Clear Results");
+		for (i=0; i<nrCells; i++){
+			setResult("Label",i,name);
+			setResult("CellNr",i,cellNr[i]);
+			setResult("CellArea",i,cellArea[i]);
+			setResult("CellMean",i,cellMean[i]);
+			setResult("NrOfSpots",i,spotNr[i]);
+			setResult("SpotSumArea",i,spotArea[i]);
+			setResult("SpotMeanArea",i,spotArea[i]/spotNr[i]);
+			setResult("SpotAvgMeanInt",i,spotMeanInt[i]);
+			setResult("SpotMeanInt",i,spotMeanInt[i]/spotNr[i]);
+			setResult("SpotMeanIntDen",i,(spotMeanInt[i]*spotArea[i])/(spotNr[i]*spotNr[i]));
+		}
+		saveAs("Results", dir+"results\\"+name+".csv");
+		run("Close All");
+		print(name," Nr of cells",nrCells, " Nr of spots", nrSpots," Mean nr of spots/cell",round(nrSpots/nrCells));
+	}
+
+}
+
+print("---------------------");
+print("Macro correctly ended");
+selectWindow("Log");
+saveAs("Text",dir+"results\\Log_"+macroName+".txt");

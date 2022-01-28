@@ -1,0 +1,11 @@
+run("RGB Color");
+saveAs("Tiff", "C:/Dropbox/Postdoc Genetics/Manuscripts/SPT_SFM paper/Figure 2 RAD51 IR foci/v2/190527_p1_dCTD_2hIR-1.tif (RGB).tif");
+close();
+run("Split Channels");
+run("RGB Color");
+saveAs("Tiff", "C:/Dropbox/Postdoc Genetics/Manuscripts/SPT_SFM paper/Figure 2 RAD51 IR foci/v2/C3-190527_p1_dCTD_2hIR-1.tif");
+close();
+run("RGB Color");
+saveAs("Tiff", "C:/Dropbox/Postdoc Genetics/Manuscripts/SPT_SFM paper/Figure 2 RAD51 IR foci/v2/C2-190527_p1_dCTD_2hIR-1.tif");
+close();
+close();

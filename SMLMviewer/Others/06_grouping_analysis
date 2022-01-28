@@ -1,0 +1,12 @@
+dir = getDirectory("Choose a Directory ");
+list = getFileList(dir);
+print(list.length);
+setBatchMode(true); 
+ for (i=0; i<list.length; i++) {
+        if (endsWith(list[i], ".txt")){
+		print(list[i]);
+		run("01 Import SML ", "image=300 image=300 pixel=100 data=Elyra open=[C:\\Users\\643003\\Desktop\\grouping\\" + list[i]+ "]");        
+     	}
+ }
+setBatchMode(false);
+
