@@ -1,5 +1,4 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
-#@ Double(label="radius",value=1.0) spot_radius
 
 import sys
 import os
@@ -16,6 +15,7 @@ from fiji.plugin.trackmate import SelectionModel
 from fiji.plugin.trackmate import Logger
 from fiji.plugin.trackmate.detection import DogDetectorFactory
 from fiji.plugin.trackmate.tracking import LAPUtils
+from fiji.plugin.trackmate.ilastik import IlastikDetectorFactory
 from fiji.plugin.trackmate.tracking.sparselap import SparseLAPTrackerFactory
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettingsIO
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
@@ -59,13 +59,12 @@ model.setLogger(Logger.IJ_LOGGER)
 settings = Settings(imp)
  
 # Configure detector - We use the Strings for the keys
-settings.detectorFactory = DogDetectorFactory()
+settings.detectorFactory = IlastikDetectorFactory()
 settings.detectorSettings = {
-    'DO_SUBPIXEL_LOCALIZATION' : True,
-    'RADIUS' : spot_radius,
-    'TARGET_CHANNEL' : 1,
-    'THRESHOLD' : 1.0,
-    'DO_MEDIAN_FILTERING' : False,  
+    'CLASSIFIER_FILEPATH' : '/media/DATA/Maarten/OneDrive/Documents/Scripts/Ilastik/BRCA2.ilp',
+    'TARGET_CHANNEL' : 3,
+    'CLASS_INDEX' : 0,
+    'PROBA_THRESHOLD' : 0.5,  
 }  
 
 # Configure spot filters - Classical filter on quality
@@ -169,13 +168,13 @@ for id in model.getTrackModel().trackIDs(True):
 
 rt.show("ResultsTable")
 
-rt_file = File(outputfolder ,"FociTracks.txt")
+rt_file = File(outputfolder ,"FociBRCA2Tracks.txt")
 rt.save(rt_file.getAbsolutePath())
 rt.reset()
 
-outFile = File(outputfolder, "exportFociTracks.xml")
+outFile = File(outputfolder, "exportFociBRCA2Tracks.xml")
 ExportTracksToXML.export(model, settings, outFile)
-outFile_TMXML= File(outputfolder, "exportFociXML.xml")
+outFile_TMXML= File(outputfolder, "exportFociBRCA2XML.xml")
 
 writer = TmXmlWriter(outFile_TMXML) #a File path object
 writer.appendModel(trackmate.getModel()) #trackmate instantiate like this before trackmate = TrackMate(model, settings)
@@ -192,5 +191,5 @@ exporter = IJRoiExporter(trackmate.getSettings().imp, model.getLogger())
 exporter.export(spots)
 rm = RoiManager.getInstance()
 rm.runCommand("Select All")
-roi_name = File(outputfolder,"fociROI.zip")
+roi_name = File(outputfolder,"fociBRCA2ROI.zip")
 rm.runCommand("Save", roi_name.getAbsolutePath())

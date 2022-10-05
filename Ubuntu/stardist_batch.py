@@ -1,4 +1,5 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
+#@ Double (label="Downscale",min=1.0,max=10.0, value=1.0) downscale
 
 import sys
 import os
@@ -22,11 +23,15 @@ import fiji.plugin.trackmate.visualization.hyperstack.HyperStackDisplayer as Hyp
 import fiji.plugin.trackmate.features.FeatureFilter as FeatureFilter
 import fiji.plugin.trackmate.action.IJRoiExporter as IJRoiExporter
 import fiji.plugin.trackmate.action.ExportTracksToXML as ExportTracksToXML
-#import fiji.plugin.trackmate.action.ExtractTrackStackAction as ExtractTrackStackAction
+import fiji.plugin.trackmate.action.ExtractTrackStackAction as ExtractTrackStackAction
 from java.util import Collections, ArrayList
 import java.awt.Frame as Frame
 
-
+if downscale != 1.0:
+	imp= IJ.getImage()
+	x = imp.getDimensions()[0]
+	y = imp.getDimensions()[1]
+	IJ.run("Size...", "width=" + str(x/downscale) + " height="+ str(x/downscale) +" constrain interpolation=None")
 
 outFile = File(outputfolder, "exportTracks.xml")
 print(outFile)
@@ -128,6 +133,7 @@ trackIDs = ArrayList(model.getTrackModel().trackIDs(True))
 #ETSA = ExtractTrackStackAction()
 #Frame = Frame()
 #stackTrack = ETSA.execute(trackmate,selectionModel,disp,Frame)
+#
 #print(stackTrack)
 ####
 
@@ -174,6 +180,8 @@ writer.appendModel(trackmate.getModel()) #trackmate instantiate like this before
 writer.appendSettings(trackmate.getSettings())
 writer.writeToFile()
 
+
+
 rm = RoiManager.getInstance()
 if not rm:
       rm = RoiManager()
@@ -184,5 +192,7 @@ exporter = IJRoiExporter(trackmate.getSettings().imp, model.getLogger())
 exporter.export(spots)
 rm = RoiManager.getInstance()
 rm.runCommand("Select All")
+if downscale != 1.0:
+	RoiManager.scale(downscale, downscale, false)
 roi_name = File(outputfolder,"nucleiROI.zip")
 rm.runCommand("Save", roi_name.getAbsolutePath())

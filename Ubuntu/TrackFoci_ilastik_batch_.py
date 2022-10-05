@@ -1,5 +1,5 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
-#@ Double(label="radius",value=1.0) spot_radius
+#@ File (label="Select folder for ",style="file") modelfolder
 
 import sys
 import os
@@ -16,6 +16,7 @@ from fiji.plugin.trackmate import SelectionModel
 from fiji.plugin.trackmate import Logger
 from fiji.plugin.trackmate.detection import DogDetectorFactory
 from fiji.plugin.trackmate.tracking import LAPUtils
+from fiji.plugin.trackmate.ilastik import IlastikDetectorFactory
 from fiji.plugin.trackmate.tracking.sparselap import SparseLAPTrackerFactory
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettingsIO
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
@@ -59,13 +60,12 @@ model.setLogger(Logger.IJ_LOGGER)
 settings = Settings(imp)
  
 # Configure detector - We use the Strings for the keys
-settings.detectorFactory = DogDetectorFactory()
+settings.detectorFactory = IlastikDetectorFactory()
 settings.detectorSettings = {
-    'DO_SUBPIXEL_LOCALIZATION' : True,
-    'RADIUS' : spot_radius,
+    'CLASSIFIER_FILEPATH' : modelfolder.getAbsolutePath(),
     'TARGET_CHANNEL' : 1,
-    'THRESHOLD' : 1.0,
-    'DO_MEDIAN_FILTERING' : False,  
+    'CLASS_INDEX' : 0,
+    'PROBA_THRESHOLD' : 0.5,  
 }  
 
 # Configure spot filters - Classical filter on quality
