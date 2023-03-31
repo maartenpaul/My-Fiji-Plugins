@@ -27,8 +27,8 @@ for (i=0; i<list.length; i++) {
 			//nuclei tracking
 			//run("Duplicate...", "duplicate channels="+nuclei_channel+"");
 			//enhance contrast to improve segmentation by Stardist
-			run("Enhance Contrast...", "saturated=10 process_all");
-			run("stardist batch","outputfolder="+ write_folder+" downscale="+downscale+" targetchannel="+nuclei_channel+"");
+			//run("Enhance Contrast...", "saturated=10 process_all");
+			run("MP_TrackNuclei_TrackmateStardist","outputfolder="+ write_folder+" downscale="+downscale+" targetchannel="+nuclei_channel+"");
 			close();
 			
 			open(list[i]);

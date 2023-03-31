@@ -1,5 +1,6 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
 #@ Double (label="Downscale",min=1.0,max=10.0, value=1.0) downscale
+#@ Integer (label="Target Channel",min=1,max=10, value=1) targetchannel
 
 import sys
 import os
@@ -65,7 +66,7 @@ settings = Settings(imp)
 settings.detectorFactory = StarDistDetectorFactory()
 settings.detectorSettings = {
 
-    'TARGET_CHANNEL' : 1,
+    'TARGET_CHANNEL' : targetchannel,
     
 }  
 
@@ -154,17 +155,30 @@ for id in model.getTrackModel().trackIDs(True):
         t=spot.getFeature('FRAME')
         q=spot.getFeature('QUALITY')
         snr=spot.getFeature('SNR_CH1')
-        mean=spot.getFeature('MEAN_INTENSITY_CH1')
-        model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean)+","+str(id))
+       	total_ch1=spot.getFeature('TOTAL_INTENSITY_CH1')
+        total_ch2=spot.getFeature('TOTAL_INTENSITY_CH2')
+        total_ch3=spot.getFeature('TOTAL_INTENSITY_CH3')
+        mean_ch1=spot.getFeature('MEAN_INTENSITY_CH1')
+        mean_ch2=spot.getFeature('MEAN_INTENSITY_CH2')
+        mean_ch3=spot.getFeature('MEAN_INTENSITY_CH3')
+        area=spot.getFeature('AREA')
+        radius=spot.getFeature('RADIUS')
+        model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean_ch1)+","+str(id))
         rt.addValue("sid",sid)
         rt.addValue("x",x)
         rt.addValue("y",y)
         rt.addValue("t",t)
         rt.addValue("q",snr)
-        rt.addValue("mean",mean)
+        rt.addValue("total_ch1",total_ch1)
+        rt.addValue("total_ch2",total_ch2)
+        rt.addValue("total_ch3",total_ch3)
+        rt.addValue("mean_ch1",mean_ch1)
+        rt.addValue("mean_ch2",mean_ch2)
+        rt.addValue("mean_ch3",mean_ch3)
+        rt.addValue("area",area)
+        rt.addValue("radius",radius)
         rt.addValue("tid",id)
         rt.addRow()
-
 rt.show("ResultsTable")
 
 rt_file = File(outputfolder ,"NucleiTracks.txt")
@@ -180,8 +194,6 @@ writer.appendModel(trackmate.getModel()) #trackmate instantiate like this before
 writer.appendSettings(trackmate.getSettings())
 writer.writeToFile()
 
-
-
 rm = RoiManager.getInstance()
 if not rm:
       rm = RoiManager()
@@ -193,6 +205,7 @@ exporter.export(spots)
 rm = RoiManager.getInstance()
 rm.runCommand("Select All")
 if downscale != 1.0:
-	RoiManager.scale(downscale, downscale, false)
+	rm.scale(downscale, downscale, False)
+	
 roi_name = File(outputfolder,"nucleiROI.zip")
 rm.runCommand("Save", roi_name.getAbsolutePath())

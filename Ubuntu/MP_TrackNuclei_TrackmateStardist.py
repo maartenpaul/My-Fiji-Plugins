@@ -7,7 +7,7 @@
 #@ Double (label="Saturate",min=0.0,max=100.0, value=0.0) saturate
 #@ Boolean (label = "Register nuclei in track stacks?", value=true) registerNucleus
 
-# Script to segment and track nuclei in a time lapse movie using Stardist and Trackmate
+# Script to segment and track nuclei in a time lapse movie using Stardist and Trackmate and export tracked nuclei to separate image Stacks
 # To run the script you need to activate the following Fiji update sites:
 # - TrackMate
 # - TrackMate-StarDist
@@ -213,7 +213,14 @@ for trackID in trackIDs:
 	file_name = File(outputfolder,stackname)
 	IJ.saveAsTiff(imp,file_name.getAbsolutePath())
 	if registerNucleus:
-		IJ.run(imp,"HyperStackReg ", "transformation=[Rigid Body] channel channel_0 channel_1 show")
+		channelsToReg = "channel"
+		nChannels = imp_dimensions=imp.getDimensions()[2] #width, height, nChannels, nSlices, nFrames
+		print(nChannels)
+		for i in range(1,nChannels):
+			channelsToReg = channelsToReg+" channel_"+str(i-1)
+		print(channelsToReg)	
+		IJ.run(imp,"HyperStackReg ", "transformation=[Rigid Body] "+channelsToReg+"")
+		
 		stackname=str(spotID)+"stack_masked_registered.tif"
 		file_name = File(outputfolder,stackname)
 		imp_reg= IJ.getImage()
