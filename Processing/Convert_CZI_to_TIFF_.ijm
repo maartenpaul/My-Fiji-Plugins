@@ -3,7 +3,7 @@
      list1 = getFileList(dir);
      files = 0;
 	for (i=0; i<list1.length; i++) {
-		if(endsWith(list1[i], "/")!=true&&endsWith(list1[i], "JPG")!=true&&endsWith(list1[i], "txt")!=true){
+		if(endsWith(list1[i], "/")!=true&&endsWith(list1[i], "JPG")!=true){
 			files++;
 			print("plus");
 		} else {
