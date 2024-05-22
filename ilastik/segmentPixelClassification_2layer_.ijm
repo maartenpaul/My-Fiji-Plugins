@@ -4,6 +4,8 @@
 #@ Integer (label = "Spheroid channel", value = 1) spheroidChannel
 #@ Integer (label = "Core channel", value = 2) coreChannel
 #@ Integer (label = "Background channel", value = 3) backgroundChannel
+#@ Boolean (label ="save Segmentation",value = true) saveSegmentation
+#@ Boolean (label ="merge Results",value = true) mergeResults
 
 //set measurements
 run("Set Measurements...", "area mean standard centroid center perimeter bounding fit feret's integrated median display redirect=None decimal=3");
@@ -19,30 +21,45 @@ for (f = 0; f < nrOfImages; f++) {
 	tableName = "SpheroidResults";
 	Table.create(tableName);	
 	print("\nProcessing file "+f+1+"/"+nrOfImages+": "+files[f] + "\n");
-	processFile(f, files[f], outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel);
+	processFile(f, files[f], outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation);
 }
-mergeTables(outputFolder);
+if (mergeResults){
+	mergeTables(files,outputFolder);	
+}
 
-function processFile(current_image_nr, input, outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel){
+
+function processFile(current_image_nr, input, outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation){
 	
 	run("Close All");
-	//run prediction
+
 	open(input);
+	
+	//check if RGB image then convert to 8bit
+	bit = bitDepth();
+	if (bit != 8.0){
+		run("8-bit");
+		run("8-bit");
+		// it appears to not always apply the conversion in one time so running the command twice seems to help
+	}
+
 	inputFileName = File.nameWithoutExtension;
 	inputImage = getTitle();
+	//run prediction
 	run("Run Pixel Classification Prediction", "projectfilename=[" + projectFile + "] pixelclassificationtype=Probabilities");
 	classImage = getTitle();
 	setBatchMode(true);
 	//calculate size of individual spheroids and determine core
-	getSpheroid(0.5,classImage,tableName,inputFileName,spheroidChannel,coreChannel,backgroundChannel);		
+	getSpheroid(0.5,classImage,inputImage,tableName,inputFileName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation);	
+
 	close(classImage);
 	close(inputImage);
 	setBatchMode("exit and display");
 }
 
-function getSpheroid(threshold,classImage,tableName,inputFileName,spheroidChannel,coreChannel,backgroundChannel){
+function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation){
 	close("Roi Manager");
 	close("Results");
+	//extract individual spheroids using the background channel
 	run("Duplicate...", "duplicate channels="+backgroundChannel+"");
 	rename(current_image_nr+"_"+backgroundChannel);
 	channelImage = getTitle();
@@ -59,6 +76,35 @@ function getSpheroid(threshold,classImage,tableName,inputFileName,spheroidChanne
 	run("Fill Holes");
 
 	run("Analyze Particles...", "size=2000-Infinity display exclude add");
+	roiManager("save", outputFolder+File.separator+"Rois_"+inputFileName+".zip");
+	if (saveSegmentation){
+		selectImage(classImage);
+		run("Duplicate...", "  channels="+coreChannel+"");
+		subsetImage = getTitle();
+		run("Select All");
+		roiManager("Set Color", "red");
+		roiManager("OR");
+		run("Clear Outside");
+	
+		setThreshold(threshold, 1000000000000000000000000000000.0000);
+		setOption("BlackBackground", true);
+		run("Convert to Mask");
+		run("Erode");
+		run("Erode");
+		run("Dilate");
+		run("Dilate");
+		run("Fill Holes");
+		run("Analyze Particles...", "size=2000-Infinity display exclude add");	
+		run("Select All");
+		run("Flatten");
+		save(outputFolder+File.separator+"masks_"+inputFileName+".tif");
+		close();
+		selectImage(subsetImage);	
+		close();
+		roiManager("save", outputFolder+File.separator+"Rois_all_"+inputFileName+".zip");
+		roiManager("reset");
+		roiManager("open", outputFolder+File.separator+"Rois_"+inputFileName+".zip");
+	}
 	selectWindow("Results");
 	Table.showRowIndexes(false);	
 	//copy results to new table
@@ -80,10 +126,11 @@ function getSpheroid(threshold,classImage,tableName,inputFileName,spheroidChanne
 		run("Clear Results");
 		selectImage(classImage);
 		roiManager("Select", i);
+		//duplicate core to measure its size
 		run("Duplicate...", "  channels="+coreChannel+"");
 		setAutoThreshold("Default dark no-reset");
 	//run("Threshold...");
-		setThreshold(0.5, 1000000000000000000000000000000.0000);
+		setThreshold(threshold, 1000000000000000000000000000000.0000);
 		setOption("BlackBackground", true);
 		run("Convert to Mask");
 		run("Erode");
@@ -134,9 +181,12 @@ function mergeTables(files,outputfolder){
 	Table.create(tableName);
 	nrOfImages = files.length;
 	for (f = 0; f < nrOfImages; f++) {
-		//print("\nProcessing file "+f+1+"/"+nrOfImages+": "+files[f] + "\n");
-	
-		open(files[f]);
+
+		fileTable = File.getName(files[f]);
+		fileTable = split(fileTable, ".");
+		fileTable = fileTable[0];	
+		fileTable = outputFolder+File.separator+"Results_"+fileTable+".txt";
+		open(fileTable);
 		resultName = File.name;
 		
 		if (f==0){
