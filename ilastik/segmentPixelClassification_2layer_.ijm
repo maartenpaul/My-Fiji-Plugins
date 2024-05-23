@@ -5,6 +5,7 @@
 #@ Integer (label = "Core channel", value = 2) coreChannel
 #@ Integer (label = "Background channel", value = 3) backgroundChannel
 #@ Boolean (label ="save Segmentation",value = true) saveSegmentation
+#@ Boolean (label ="run segmentation",value = true) runSegmentation
 #@ Boolean (label ="merge Results",value = true) mergeResults
 
 //set measurements
@@ -17,19 +18,20 @@ nrOfImages = files.length;
 if(!File.exists(outputFolder)) {
  	File.makeDirectory(outputFolder);
 }
-for (f = 0; f < nrOfImages; f++) {
-	tableName = "SpheroidResults";
-	Table.create(tableName);	
-	print("\nProcessing file "+f+1+"/"+nrOfImages+": "+files[f] + "\n");
-	processFile(f, files[f], outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation);
+if (runSegmentation){
+	for (f = 0; f < nrOfImages; f++) {
+		tableName = "SpheroidResults";
+		Table.create(tableName);	
+		print("\nProcessing file "+f+1+"/"+nrOfImages+": "+files[f] + "\n");
+		processFile(f, files[f], outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation);
+	
+	}
 }
 if (mergeResults){
 	mergeTables(files,outputFolder);	
 }
 
-
 function processFile(current_image_nr, input, outputFolder, projectFile,tableName,spheroidChannel,coreChannel,backgroundChannel,saveSegmentation){
-	
 	run("Close All");
 
 	open(input);
@@ -61,10 +63,9 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 	close("Results");
 	//extract individual spheroids using the background channel
 	run("Duplicate...", "duplicate channels="+backgroundChannel+"");
-	rename(current_image_nr+"_"+backgroundChannel);
+	rename(inputFileName+"_prediction");
 	channelImage = getTitle();
 	setAutoThreshold("Default dark no-reset");
-//run("Threshold...");
 	setThreshold(threshold, 1000000000000000000000000000000.0000);
 	setOption("BlackBackground", true);
 	run("Convert to Mask");
@@ -94,8 +95,9 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 		run("Dilate");
 		run("Dilate");
 		run("Fill Holes");
-		run("Analyze Particles...", "size=2000-Infinity display exclude add");	
-		run("Select All");
+		run("Analyze Particles...", "size=2000-Infinity exclude add");
+		selectImage(inputImage);
+		roiManager("show all with labels");
 		run("Flatten");
 		save(outputFolder+File.separator+"masks_"+inputFileName+".tif");
 		close();
@@ -118,18 +120,20 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 	for (i =0; i < nHeadings; i++) {
 		column= Table.getColumn(tableHeadings[i],resultName);
 		Table.setColumn(tableHeadings[i], column,tableName); 
-		print(channelImage);
+
 	}
 
 	
 	for (i = 0; i < roiManager("size"); i++) {
+		print(i);
 		run("Clear Results");
 		selectImage(classImage);
 		roiManager("Select", i);
 		//duplicate core to measure its size
 		run("Duplicate...", "  channels="+coreChannel+"");
+		rename(inputFileName+"_prediction_core");
 		setAutoThreshold("Default dark no-reset");
-	//run("Threshold...");
+		//run("Threshold...");
 		setThreshold(threshold, 1000000000000000000000000000000.0000);
 		setOption("BlackBackground", true);
 		run("Convert to Mask");
@@ -144,7 +148,7 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 		selectWindow("Results");
 		Table.showRowIndexes(false);
 		numberParticles = Table.size;
-		
+		//check if a spheroid core is found and if more ROIs are found pick the largest
 		if (numberParticles==0){
 			print("no core found");
 		} else if (numberParticles>1){
@@ -155,18 +159,21 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 		} else {
 			largetstObject= 0;
 		}
-		tableHeadingsStr=Table.headings;
-		tableHeadings=split(tableHeadingsStr,"\t");
-		nHeadings = tableHeadings.length;
-		for (j =0; j < nHeadings; j++) {
-			column= Table.getColumn(tableHeadings[j],resultName);
-			headingName = "Core_"+ tableHeadings[j];
-			Table.set(headingName, i,column[largetstObject],tableName); 
+		if (numberParticles!=0){ 
+			tableHeadingsStr=Table.headings;
+			tableHeadings=split(tableHeadingsStr,"\t");
+			nHeadings = tableHeadings.length;
+			for (j =0; j < nHeadings; j++) {
+				column= Table.getColumn(tableHeadings[j],resultName);
+				headingName = "Core_"+ tableHeadings[j];
+				print(headingName);
+
+				Table.set(headingName, i,column[largetstObject],tableName); 
+			}
 		}
 		close(cropImage);
 		selectWindow(tableName);
 		Table.update;
-
 	}
 	roiManager("reset");
 	close(channelImage);
@@ -174,6 +181,8 @@ function getSpheroid(threshold,classImage,inputImage,tableName,inputFileName,sph
 	selectWindow(tableName);
 	Table.save(outputFolder+File.separator+"Results_"+inputFileName+".txt");
 	close(tableName);
+
+	
 }
 function mergeTables(files,outputfolder){
 	run("Close All");
@@ -185,20 +194,27 @@ function mergeTables(files,outputfolder){
 		fileTable = File.getName(files[f]);
 		fileTable = split(fileTable, ".");
 		fileTable = fileTable[0];	
-		fileTable = outputFolder+File.separator+"Results_"+fileTable+".txt";
-		open(fileTable);
-		resultName = File.name;
+		fileTablePath = outputFolder+File.separator+"Results_"+fileTable+".txt";
+		///open(fileTable);
+		
+		Table.open(fileTablePath);
+		resultName = "Results_"+fileTable+".txt";
+		selectWindow(resultName);
+
+
 		
 		if (f==0){
+
 			tableHeadingsStr=Table.headings;
+			print(tableHeadingsStr);
 			tableHeadings=split(tableHeadingsStr,"\t");
-			print(tableHeadings[1]);
+
 			nHeadings = tableHeadings.length;		
 			print(nHeadings);
-		
+			print(tableHeadings[1]);
 	
-			for (i =0; i < nHeadings; i++) {
-	
+			for (i =1; i < nHeadings; i++) {
+				print(tableHeadings[i]);
 				column= Table.getColumn(tableHeadings[i],resultName);
 	
 				Table.setColumn(tableHeadings[i], column,tableName); 
@@ -210,7 +226,7 @@ function mergeTables(files,outputfolder){
 			}
 			Table.setColumn("imageName",ImageColumn,tableName);
 		} else {
-			for (i =0; i < nHeadings; i++) {
+			for (i =1; i < nHeadings; i++) {
 				print(tableHeadings[i]);
 				column1 = Table.getColumn(tableHeadings[i],tableName);
 				print(column1.length);
@@ -230,10 +246,10 @@ function mergeTables(files,outputfolder){
 			Table.setColumn("imageName",columnMerge,tableName);
 	}
 	close(resultName);
+
 }
 Table.save(outputFolder+File.separator+"AllResults.txt",tableName);
+close(tableName);
 
 	
 }
-
-
