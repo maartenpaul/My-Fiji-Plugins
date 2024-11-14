@@ -25,8 +25,7 @@ import_trackmate <- function(file_path) {
   return(tracks)
 }
 
-spots <- import_trackmate("/media/DATA/Maarten/OneDrive/Data2/241011_Timelapse_mSG-R51/MAX/MAX_001_IB10_mSG+_B3/all_nuclei_spots.csv")
-tracks <- import_trackmate("/media/DATA/Maarten/OneDrive/Data2/241011_Timelapse_mSG-R51/MAX/MAX_001_IB10_mSG+_B3/all_nuclei_spots.csv")
+spots <- import_trackmate("/media/DATA/Maarten/OneDrive/Data2/241011_Timelapse_mSG-R51/MAX/MAX_001_IB10_mSG+_B3/nuclei_unfiltered_spots.csv")
 
 foci <- import_trackmate("/media/DATA/Maarten/OneDrive/Data2/241011_Timelapse_mSG-R51/MAX/MAX_004_IB10_mSG+_B3/foci_unfiltered_spots.csv")
 foci %>% 
@@ -52,3 +51,6 @@ spots %>%
        y = "Number of foci",
        title = "Foci count over time") +
   theme_minimal()
+
+#What I need to add is a function to allow for filtering of nuclei spots and also foci spots; this can be a generic function that makes it easy t
+# Later on, but not now should work on importing tracks; link to spots and do analysis on 
