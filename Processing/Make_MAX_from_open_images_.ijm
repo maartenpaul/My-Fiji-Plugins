@@ -5,7 +5,7 @@ dir = getDirectory("image");
 
 // Get the list of open images
 list = getList("image.titles");
-
+iterator = 1;
 // Loop over each image in the list
 for (i = 0; i < list.length; i++) {
 
@@ -14,16 +14,25 @@ for (i = 0; i < list.length; i++) {
 
     // Get the title of the current image
     title = getTitle();
-
-    // Create a new title for the maximum intensity projection
-    newTitle = "MAX_" + title;
     
-    if (newTitle.contains("/")){
-    	print("Title contains file seperator");
-    	splitTitle = split(newTitle, "/");
-    	newTitle= String.join(splitTitle);
-    }
+	
+    // Create a new title for the maximum intensity projection
 
+    
+    if (title.contains("/")){
+    	print("Title contains file seperator");
+    	splitTitle = split(title, "/");
+    	title= String.join(splitTitle);
+    }
+    if (File.exists(dir + title+".tif")){
+    	title = title + "_"+IJ.pad(iterator, 3);
+    	iterator = iterator + 1;
+    } else {
+    	iterator = 1;
+    }
+    
+
+    newTitle = "MAX_" + title;
     // Create the maximum intensity projection
     run("Z Project...", "projection=[Max Intensity]");
 
@@ -32,5 +41,6 @@ for (i = 0; i < list.length; i++) {
 
     // Close the maximum intensity projection
     close();
+    saveAs("Tiff", dir + title);
     close();
 }

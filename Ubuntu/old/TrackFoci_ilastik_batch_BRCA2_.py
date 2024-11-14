@@ -1,6 +1,5 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
-#@ Double (label="Downscale",min=1.0,max=10.0, value=1.0) downscale
-#@ Integer (label="Target Channel",min=1,max=10, value=1) targetchannel
+#@ Integer (label="Downscale",min=1,max=10, value=1) targetchannel
 
 import sys
 import os
@@ -15,24 +14,22 @@ from fiji.plugin.trackmate import Settings
 from fiji.plugin.trackmate import TrackMate
 from fiji.plugin.trackmate import SelectionModel
 from fiji.plugin.trackmate import Logger
-from fiji.plugin.trackmate.stardist import StarDistDetectorFactory
+from fiji.plugin.trackmate.detection import DogDetectorFactory
 from fiji.plugin.trackmate.tracking import LAPUtils
-from fiji.plugin.trackmate.tracking.overlap import OverlapTrackerFactory
+from fiji.plugin.trackmate.ilastik import IlastikDetectorFactory
+from fiji.plugin.trackmate.tracking.sparselap import SparseLAPTrackerFactory
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettingsIO
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
+from fiji.plugin.trackmate.action.fit import SpotFitterController
 import fiji.plugin.trackmate.visualization.hyperstack.HyperStackDisplayer as HyperStackDisplayer
 import fiji.plugin.trackmate.features.FeatureFilter as FeatureFilter
 import fiji.plugin.trackmate.action.IJRoiExporter as IJRoiExporter
 import fiji.plugin.trackmate.action.ExportTracksToXML as ExportTracksToXML
-import fiji.plugin.trackmate.action.ExtractTrackStackAction as ExtractTrackStackAction
+#import fiji.plugin.trackmate.action.ExtractTrackStackAction as ExtractTrackStackAction
 from java.util import Collections, ArrayList
 import java.awt.Frame as Frame
 
-if downscale != 1.0:
-	imp= IJ.getImage()
-	x = imp.getDimensions()[0]
-	y = imp.getDimensions()[1]
-	IJ.run("Size...", "width=" + str(x/downscale) + " height="+ str(x/downscale) +" constrain interpolation=None")
+
 
 outFile = File(outputfolder, "exportTracks.xml")
 print(outFile)
@@ -63,24 +60,34 @@ model.setLogger(Logger.IJ_LOGGER)
 settings = Settings(imp)
  
 # Configure detector - We use the Strings for the keys
-settings.detectorFactory = StarDistDetectorFactory()
+settings.detectorFactory = IlastikDetectorFactory()
 settings.detectorSettings = {
-
-    'TARGET_CHANNEL' : targetchannel,
-    
+    'CLASSIFIER_FILEPATH' : '/media/DATA/Maarten/OneDrive/Documents/Scripts/Ilastik/BRCA2.ilp',
+    'TARGET_CHANNEL' : 3,
+    'CLASS_INDEX' : 1,
+    'PROBA_THRESHOLD' : 0.3,  
 }  
 
 # Configure spot filters - Classical filter on quality
-filter1 = FeatureFilter('AREA', 100, True)
-settings.addSpotFilter(filter1)
+#filter1 = FeatureFilter('AREA', 100, True)
+#settings.addSpotFilter(filter1)
  
 # Configure tracker - We want to allow merges and fusions
-settings.trackerFactory = OverlapTrackerFactory()
-#settings.trackerSettings = LAPUtils.getDefaultLAPSettingsMap() # almost good enough
-settings.trackerSettings['IOU_CALCULATION'] = "PRECISE"
-settings.trackerSettings['MIN_IOU'] = 0.1
-settings.trackerSettings['SCALE_FACTOR'] = 1.0
- 
+settings.trackerFactory = SparseLAPTrackerFactory()
+settings.trackerSettings = LAPUtils.getDefaultLAPSettingsMap() # almost good enough
+
+settings.trackerSettings['LINKING_MAX_DISTANCE']  = 3.0
+settings.trackerSettings['ALLOW_GAP_CLOSING'] = True
+settings.trackerSettings['MAX_FRAME_GAP'] = 1
+settings.trackerSettings['GAP_CLOSING_MAX_DISTANCE']  = 2.0
+settings.trackerSettings['ALLOW_TRACK_SPLITTING'] = True
+settings.trackerSettings['SPLITTING_MAX_DISTANCE'] = 1.0
+settings.trackerSettings['ALLOW_TRACK_MERGING'] = True
+settings.trackerSettings['MERGING_MAX_DISTANCE'] = 1.0
+
+
+
+
 # Add ALL the feature analyzers known to TrackMate. They will 
 # yield numerical features for the results, such as speed, mean intensity etc.
 settings.addAllAnalyzers()
@@ -125,21 +132,55 @@ fm = model.getFeatureModel()
 
 trackIDs = ArrayList(model.getTrackModel().trackIDs(True))
 
-####attempt to create cropped and aligned nuclei movies, does not work so skip for now
-#disp = DisplaySettings()
-#track = ArrayList(model.getTrackModel().trackSpots(trackIDs[0]))
-#spot = track[0]
-#print(spot.ID())
-#selectionModel.addSpotToSelection(spot)
-#ETSA = ExtractTrackStackAction()
-#Frame = Frame()
-#stackTrack = ETSA.execute(trackmate,selectionModel,disp,Frame)
-#
-#print(stackTrack)
-####
+#controller = SpotFitterController(trackmate,selectionModel,model.getLogger().log( str( model ) ))
+#controller.show()
 
 #initiate new results table
+#initiate new results table for spots
 rt = ResultsTable()
+
+spots = trackmate.getModel().getSpots().iterable(True)
+
+for spot in spots:
+	sid = spot.ID()
+	x=spot.getFeature('POSITION_X')
+	y=spot.getFeature('POSITION_Y')
+	t=spot.getFeature('FRAME')
+	q=spot.getFeature('QUALITY')
+	snr=spot.getFeature('SNR_CH1')
+	total_ch1=spot.getFeature('TOTAL_INTENSITY_CH1')
+	total_ch2=spot.getFeature('TOTAL_INTENSITY_CH2')
+	total_ch3=spot.getFeature('TOTAL_INTENSITY_CH3')
+	mean_ch1=spot.getFeature('MEAN_INTENSITY_CH1')
+	mean_ch2=spot.getFeature('MEAN_INTENSITY_CH2')
+	mean_ch3=spot.getFeature('MEAN_INTENSITY_CH3')
+	area=spot.getFeature('AREA')
+	radius=spot.getFeature('RADIUS')
+	model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean_ch1)+","+str(id))
+	rt.addValue("sid",sid)
+	rt.addValue("x",x)
+	rt.addValue("y",y)
+	rt.addValue("t",t)
+	rt.addValue("q",snr)
+	rt.addValue("total_ch1",total_ch1)
+	rt.addValue("total_ch2",total_ch2)
+	rt.addValue("total_ch3",total_ch3)
+	rt.addValue("mean_ch1",mean_ch1)
+	rt.addValue("mean_ch2",mean_ch2)
+	rt.addValue("mean_ch3",mean_ch3)
+	rt.addValue("area",area)
+	rt.addValue("radius",radius)
+	rt.addRow()
+
+
+
+rt.show("ResultsTable")
+rt_file = File(outputfolder ,"FociBRCA2Spots.txt")
+rt.save(rt_file.getAbsolutePath())
+rt.reset()
+
+rt = ResultsTable()
+
 
 # Iterate over all the tracks that are visible.
 for id in model.getTrackModel().trackIDs(True):
@@ -170,8 +211,8 @@ for id in model.getTrackModel().trackIDs(True):
         rt.addValue("t",t)
         rt.addValue("q",snr)
         rt.addValue("total_ch1",total_ch1)
-        rt.addValue("total_ch2",total_ch2)
-        rt.addValue("total_ch3",total_ch3)
+        rt.addValue("total_ch2",total_ch1)
+        rt.addValue("total_ch3",total_ch1)
         rt.addValue("mean_ch1",mean_ch1)
         rt.addValue("mean_ch2",mean_ch2)
         rt.addValue("mean_ch3",mean_ch3)
@@ -179,15 +220,16 @@ for id in model.getTrackModel().trackIDs(True):
         rt.addValue("radius",radius)
         rt.addValue("tid",id)
         rt.addRow()
+
 rt.show("ResultsTable")
 
-rt_file = File(outputfolder ,"NucleiTracks.txt")
+rt_file = File(outputfolder ,"FociBRCA2Tracks.txt")
 rt.save(rt_file.getAbsolutePath())
 rt.reset()
 
-outFile = File(outputfolder, "exportTracks.xml")
+outFile = File(outputfolder, "exportFociBRCA2Tracks.xml")
 ExportTracksToXML.export(model, settings, outFile)
-outFile_TMXML= File(outputfolder, "exportXML.xml")
+outFile_TMXML= File(outputfolder, "exportFociBRCA2XML.xml")
 
 writer = TmXmlWriter(outFile_TMXML) #a File path object
 writer.appendModel(trackmate.getModel()) #trackmate instantiate like this before trackmate = TrackMate(model, settings)
@@ -204,8 +246,5 @@ exporter = IJRoiExporter(trackmate.getSettings().imp, model.getLogger())
 exporter.export(spots)
 rm = RoiManager.getInstance()
 rm.runCommand("Select All")
-if downscale != 1.0:
-	rm.scale(downscale, downscale, False)
-	
-roi_name = File(outputfolder,"nucleiROI.zip")
+roi_name = File(outputfolder,"fociBRCA2ROI.zip")
 rm.runCommand("Save", roi_name.getAbsolutePath())
