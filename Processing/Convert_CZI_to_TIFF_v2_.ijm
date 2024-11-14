@@ -27,9 +27,19 @@
 		     			//print("SNAP");
 		     		} else if (endsWith(file, ".czi")){
 						run("Bio-Formats", "open=[" + file+ "] color_mode=Default open_files view=Hyperstack stack_order=XYCZT use_virtual_stack");
+						file_name = File.nameWithoutExtension;
 						File.makeDirectory(dir+list1[j]+File.nameWithoutExtension+ File.separator);
 						saveAs("Tiff", dir + list1[j]+File.nameWithoutExtension+ File.separator+File.nameWithoutExtension+".tif");
 						close();
+						snapfile =  split(file_name, " ");
+						
+						snapfile_path = dir+list1[j]+snapfile[0] + " SNAP.czi";
+						
+						if (File.exists(snapfile_path)){
+							run("Bio-Formats", "open=[" + snapfile_path+ "] color_mode=Default open_files view=Hyperstack stack_order=XYCZT use_virtual_stack");
+							saveAs("Tiff", dir + list1[j]+ file_name+ File.separator+snapfile[0] + " SNAP.tif");
+							close();
+						}
 		     		}
 		     	}
 		     }
@@ -46,9 +56,19 @@
 	     			print("SNAP");
 	     		} else{
 					run("Bio-Formats", "open=[" + file+ "] color_mode=Default open_files view=Hyperstack stack_order=XYCZT use_virtual_stack");
+					file_name = File.nameWithoutExtension;
 					File.makeDirectory(dir+File.nameWithoutExtension+ File.separator);
 					saveAs("Tiff", dir + File.nameWithoutExtension+ File.separator+File.nameWithoutExtension+".tif");
 					close();
+					snapfile =  split(file_name, " ");
+						
+						snapfile_path = dir+snapfile[0] + " SNAP.czi";
+						
+						if (File.exists(snapfile_path)){
+							run("Bio-Formats", "open=[" + snapfile_path+ "] color_mode=Default open_files view=Hyperstack stack_order=XYCZT use_virtual_stack");
+							saveAs("Tiff", dir + file_name+ File.separator+snapfile[0] + " SNAP.tif");
+							close();
+						}
 	     		}
 	     	}
 	     }

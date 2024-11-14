@@ -1,4 +1,5 @@
 #@ File (label="Select folder for ",style="directory") outputfolder
+#@ Integer (label="Downscale",min=1,max=10, value=1) targetchannel
 
 import sys
 import os
@@ -15,6 +16,7 @@ from fiji.plugin.trackmate import SelectionModel
 from fiji.plugin.trackmate import Logger
 from fiji.plugin.trackmate.detection import DogDetectorFactory
 from fiji.plugin.trackmate.tracking import LAPUtils
+from fiji.plugin.trackmate.ilastik import IlastikDetectorFactory
 from fiji.plugin.trackmate.tracking.sparselap import SparseLAPTrackerFactory
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettingsIO
 from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
@@ -58,13 +60,12 @@ model.setLogger(Logger.IJ_LOGGER)
 settings = Settings(imp)
  
 # Configure detector - We use the Strings for the keys
-settings.detectorFactory = DogDetectorFactory()
+settings.detectorFactory = IlastikDetectorFactory()
 settings.detectorSettings = {
-    'DO_SUBPIXEL_LOCALIZATION' : True,
-    'RADIUS' : 0.5,
-    'TARGET_CHANNEL' : 1,
-    'THRESHOLD' : 0.5,
-    'DO_MEDIAN_FILTERING' : False,  
+    'CLASSIFIER_FILEPATH' : '/media/DATA/Maarten/OneDrive/Documents/Scripts/Ilastik/BRCA2.ilp',
+    'TARGET_CHANNEL' : 3,
+    'CLASS_INDEX' : 1,
+    'PROBA_THRESHOLD' : 0.3,  
 }  
 
 # Configure spot filters - Classical filter on quality
@@ -135,7 +136,51 @@ trackIDs = ArrayList(model.getTrackModel().trackIDs(True))
 #controller.show()
 
 #initiate new results table
+#initiate new results table for spots
 rt = ResultsTable()
+
+spots = trackmate.getModel().getSpots().iterable(True)
+
+for spot in spots:
+	sid = spot.ID()
+	x=spot.getFeature('POSITION_X')
+	y=spot.getFeature('POSITION_Y')
+	t=spot.getFeature('FRAME')
+	q=spot.getFeature('QUALITY')
+	snr=spot.getFeature('SNR_CH1')
+	total_ch1=spot.getFeature('TOTAL_INTENSITY_CH1')
+	total_ch2=spot.getFeature('TOTAL_INTENSITY_CH2')
+	total_ch3=spot.getFeature('TOTAL_INTENSITY_CH3')
+	mean_ch1=spot.getFeature('MEAN_INTENSITY_CH1')
+	mean_ch2=spot.getFeature('MEAN_INTENSITY_CH2')
+	mean_ch3=spot.getFeature('MEAN_INTENSITY_CH3')
+	area=spot.getFeature('AREA')
+	radius=spot.getFeature('RADIUS')
+	model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean_ch1)+","+str(id))
+	rt.addValue("sid",sid)
+	rt.addValue("x",x)
+	rt.addValue("y",y)
+	rt.addValue("t",t)
+	rt.addValue("q",snr)
+	rt.addValue("total_ch1",total_ch1)
+	rt.addValue("total_ch2",total_ch2)
+	rt.addValue("total_ch3",total_ch3)
+	rt.addValue("mean_ch1",mean_ch1)
+	rt.addValue("mean_ch2",mean_ch2)
+	rt.addValue("mean_ch3",mean_ch3)
+	rt.addValue("area",area)
+	rt.addValue("radius",radius)
+	rt.addRow()
+
+
+
+rt.show("ResultsTable")
+rt_file = File(outputfolder ,"FociBRCA2Spots.txt")
+rt.save(rt_file.getAbsolutePath())
+rt.reset()
+
+rt = ResultsTable()
+
 
 # Iterate over all the tracks that are visible.
 for id in model.getTrackModel().trackIDs(True):
@@ -151,28 +196,40 @@ for id in model.getTrackModel().trackIDs(True):
         t=spot.getFeature('FRAME')
         q=spot.getFeature('QUALITY')
         snr=spot.getFeature('SNR_CH1')
-        mean=spot.getFeature('MEAN_INTENSITY_CH1')
+       	total_ch1=spot.getFeature('TOTAL_INTENSITY_CH1')
+        total_ch2=spot.getFeature('TOTAL_INTENSITY_CH2')
+        total_ch3=spot.getFeature('TOTAL_INTENSITY_CH3')
+        mean_ch1=spot.getFeature('MEAN_INTENSITY_CH1')
+        mean_ch2=spot.getFeature('MEAN_INTENSITY_CH2')
+        mean_ch3=spot.getFeature('MEAN_INTENSITY_CH3')
+        area=spot.getFeature('AREA')
         radius=spot.getFeature('RADIUS')
-        model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean)+","+str(id))
+        model.getLogger().log('\tspot ID = ' + str(sid) + ','+str(x)+','+str(y)+','+str(t)+','+str(q) + ','+str(snr) + ',' + str(mean_ch1)+","+str(id))
         rt.addValue("sid",sid)
         rt.addValue("x",x)
         rt.addValue("y",y)
         rt.addValue("t",t)
         rt.addValue("q",snr)
-        rt.addValue("mean",mean)
+        rt.addValue("total_ch1",total_ch1)
+        rt.addValue("total_ch2",total_ch1)
+        rt.addValue("total_ch3",total_ch1)
+        rt.addValue("mean_ch1",mean_ch1)
+        rt.addValue("mean_ch2",mean_ch2)
+        rt.addValue("mean_ch3",mean_ch3)
+        rt.addValue("area",area)
         rt.addValue("radius",radius)
         rt.addValue("tid",id)
         rt.addRow()
 
 rt.show("ResultsTable")
 
-rt_file = File(outputfolder ,"FociTracks.txt")
+rt_file = File(outputfolder ,"FociBRCA2Tracks.txt")
 rt.save(rt_file.getAbsolutePath())
 rt.reset()
 
-outFile = File(outputfolder, "exportFociTracks.xml")
+outFile = File(outputfolder, "exportFociBRCA2Tracks.xml")
 ExportTracksToXML.export(model, settings, outFile)
-outFile_TMXML= File(outputfolder, "exportFociXML.xml")
+outFile_TMXML= File(outputfolder, "exportFociBRCA2XML.xml")
 
 writer = TmXmlWriter(outFile_TMXML) #a File path object
 writer.appendModel(trackmate.getModel()) #trackmate instantiate like this before trackmate = TrackMate(model, settings)
@@ -189,5 +246,5 @@ exporter = IJRoiExporter(trackmate.getSettings().imp, model.getLogger())
 exporter.export(spots)
 rm = RoiManager.getInstance()
 rm.runCommand("Select All")
-roi_name = File(outputfolder,"fociROI.zip")
+roi_name = File(outputfolder,"fociBRCA2ROI.zip")
 rm.runCommand("Save", roi_name.getAbsolutePath())
