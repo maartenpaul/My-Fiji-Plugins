@@ -33,7 +33,7 @@
 						close();
 						snapfile =  split(file_name, " ");
 						
-						snapfile_path = dir+list1[j]+snapfile[0] + " SNAP.czi";
+						snapfile_path = dir+snapfile[0] + " SNAP.czi";
 						
 						if (File.exists(snapfile_path)){
 							run("Bio-Formats", "open=[" + snapfile_path+ "] color_mode=Default open_files view=Hyperstack stack_order=XYCZT use_virtual_stack");
