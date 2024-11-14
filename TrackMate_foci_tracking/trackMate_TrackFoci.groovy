@@ -13,7 +13,6 @@
 //@ Boolean (label = "Allow Gap Closing?", value=true) allowGap
 //@ Integer(label="Maximum Gap (frames)",value=1) maxGap
 //@ Double(label="Linking Max Distance (um)",value=1.0) maxGapDistance
-//To be added parameters for track splitting an merging
 
 // ImageJ imports
 import ij.IJ
@@ -45,44 +44,32 @@ import fiji.plugin.trackmate.visualization.hyperstack.HyperStackDisplayer
 import fiji.plugin.trackmate.features.FeatureFilter
 import fiji.plugin.trackmate.action.IJRoiExporter
 import fiji.plugin.trackmate.action.ExportTracksToXML
-// import fiji.plugin.trackmate.action.ExtractTrackStackAction  // Commented out as in original
 
 def trackFoci(outputFolder, filename, imp, spotDetector) {
-    def outFile = new File(new File(outputFolder, filename), filename + "exportTracks.xml")
-	// We have to do the following to avoid errors with UTF8 chars generated in 
-	 //TrackMate that will mess with our Fiji Jython.
-//	reload(sys)
-//	sys.setdefaultencoding('utf-8')
-		
-	//----------------------------
-	// Create the model object now
-	//----------------------------
-	 
-	// Some of the parameters we configure below need to have
-	// a reference to the model at creation. So we create an
-	// empty model now.
-	 
-	model = new Model()
-	 
-	//Send all messages to ImageJ log window.
-	model.setLogger(Logger.IJ_LOGGER)
-	
-	//------------------------
-	// Prepare settings object
-	//------------------------
-		// Configure detector - We use the Strings for the keys 
-	settings = new Settings(imp)
-	if (spotDetector=="DoG spot detector"){
-		detectFociDoG(settings)
-	} else if (spotDetector=="Ilastik segmentation"){
-		detectFociIlastik(settings)
-	}
-
-    print("tracker is set")
-	// Configure tracker - We want to allow merges and fusions
-	settings.trackerFactory = new SparseLAPTrackerFactory()
-	settings.trackerSettings = settings.trackerFactory.getDefaultSettings() // almost good enough
-
+    println "Starting trackFoci for file: $filename"
+    def outFile = new File(outputFolder, filename + "exportTracks.xml")
+    
+    // Create the model object
+    def model = new Model()
+    model.setLogger(Logger.IJ_LOGGER)
+    
+    // Prepare settings object
+    def settings = new Settings(imp)
+    
+    // Configure detector based on selection
+    if (spotDetector == "DoG spot detector") {
+        println "Using DoG detector"
+        settings = detectFociDoG(settings)
+    } else if (spotDetector == "Ilastik segmentation") {
+        println "Using Ilastik detector"
+        settings = detectFociIlastik(settings)
+    }
+    
+    // Configure tracker
+    settings.trackerFactory = new SparseLAPTrackerFactory()
+    settings.trackerSettings = settings.trackerFactory.getDefaultSettings()
+    
+    // Only modify specific settings
     settings.trackerSettings['LINKING_MAX_DISTANCE'] = maxDistance
     settings.trackerSettings['ALLOW_GAP_CLOSING'] = allowGap
     settings.trackerSettings['MAX_FRAME_GAP'] = maxGap
@@ -91,59 +78,33 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
     settings.trackerSettings['SPLITTING_MAX_DISTANCE'] = 1.0d
     settings.trackerSettings['ALLOW_TRACK_MERGING'] = false
     settings.trackerSettings['MERGING_MAX_DISTANCE'] = 1.0d
-	// Add ALL the feature analyzers known to TrackMate. They will 
-	// yield numerical features for the results, such as speed, mean intensity etc.
-	settings.addAllAnalyzers()
-
-	//-------------------
-	// Instantiate plugin
-	//-------------------
-
-	def trackmate = new TrackMate(model, settings)
-
-	//--------
-	// Process
-	//--------
-	print("now trackis is set")
-	def ok = trackmate.checkInput()
-	if (!ok) {
-	    System.exit(trackmate.getErrorMessage())
-	}
-
-	ok = trackmate.process()
-	if (!ok) {
-	    return
-	}
-
-	//----------------
-	// Display results
-	//----------------
-
-	// A selection.
-	def selectionModel = new SelectionModel(model)
-
-	// Read the default display settings.
-	def ds = DisplaySettingsIO.readUserDefault()
-
-	// displayer = new HyperStackDisplayer(model, selectionModel, imp, ds)
-	// displayer.render()
-	// displayer.refresh()
-
-	// Echo results with the logger we set at start:
-	model.getLogger().log(model.toString())
-
-	def fm = model.getFeatureModel()
-
-	def trackIDs = new ArrayList(model.getTrackModel().trackIDs(true))
-
-	// Initiate new results table
-	def rt = new ResultsTable()
-
-	// Iterate over all the tracks that are visible.
-    for (def id : model.getTrackModel().trackIDs(true)) {
-        // Fetch the track feature from the feature model. 
-        // Get all the spots of the current track.
-        // write to resultsTable
+    
+    // Add all analyzers
+    settings.addAllAnalyzers()
+    
+    // Create and process TrackMate instance
+    def trackmate = new TrackMate(model, settings)
+    
+    println "Checking TrackMate input"
+    if (!trackmate.checkInput()) {
+        println "TrackMate input check failed: ${trackmate.getErrorMessage()}"
+        return
+    }
+    
+    println "Processing TrackMate"
+    if (!trackmate.process()) {
+        println "TrackMate processing failed"
+        return
+    }
+    
+    // Create selection model
+    def selectionModel = new SelectionModel(model)
+    
+    // Process results
+    def rt = new ResultsTable()
+    
+    // Process all tracks
+    model.getTrackModel().trackIDs(true).each { id ->
         def track = model.getTrackModel().trackSpots(id)
         
         track.each { spot ->
@@ -157,8 +118,7 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
             def mean_ch3 = spot.getFeature('MEAN_INTENSITY_CH3')
             def radius = spot.getFeature('RADIUS')
             
-            model.getLogger().log("\tspot ID = ${sid}, ${x}, ${y}, ${t}, ${q}, ${snr}, ${mean}, ${id}")
-            
+            // Add to results table
             rt.addValue("sid", sid)
             rt.addValue("x", x)
             rt.addValue("y", y)
@@ -171,73 +131,109 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
             rt.addRow()
         }
     }
-//	rt.show("ResultsTable")
-    def rt_file = new File(new File(outputFolder, filename), filename + "FociTracks.txt")
+    
+    // Save results
+    def rt_file = new File(outputFolder, filename + "FociTracks.txt")
     rt.save(rt_file.absolutePath)
     rt.reset()
     
-    //outFile = new File(outputFolder, filename + "exportFociTracks.xml")
-    //ExportTracksToXML.export(model, settings, outFile)
-    def outFile_TMXML = new File(new File(outputFolder, filename), filename + "exportFociXML.xml")
-    
-    def writer = new TmXmlWriter(outFile_TMXML) //a File path object
-    writer.appendModel(trackmate.model) //trackmate instantiate like this before trackmate = TrackMate(model, settings)
-    writer.appendSettings(trackmate.settings)
+    // Save TrackMate XML
+    def outFile_TMXML = new File(outputFolder, filename + "exportFociXML.xml")
+    def writer = new TmXmlWriter(outFile_TMXML)
+    writer.appendModel(trackmate.getModel())
+    writer.appendSettings(trackmate.getSettings())
     writer.writeToFile()
     
-    def rm = RoiManager.getInstance()
-    if (!rm) {
-        rm = new RoiManager()
-    }
+    // Handle ROIs
+    def rm = RoiManager.getInstance() ?: new RoiManager()
     rm.reset()
     
-    def spots = trackmate.model.spots.iterable(true)
-    def exporter = new IJRoiExporter(trackmate.settings.imp, model.logger)
+    def spots = trackmate.getModel().getSpots().iterable(true)
+    def exporter = new IJRoiExporter(trackmate.getSettings().imp, model.getLogger())
     exporter.export(spots)
     rm = RoiManager.getInstance()
     rm.runCommand("Select All")
-    def roi_name = new File(new File(outputFolder, filename), filename + "FociROI.zip")
+    def roi_name = new File(outputFolder, filename + "FociROI.zip")
     rm.runCommand("Save", roi_name.absolutePath)
-}  
+    
+    println "Completed processing for file: $filename"
+}
+
 def detectFociIlastik(settings) {
-    // Configure detector - We use the Strings for the keys
+    println "Configuring Ilastik detector"
+    println "Model file path: ${modelFile.absolutePath}"
+    println "Target channel: ${targetchannel}"
+    println "Class index: ${classindex}"
+    
     settings.detectorFactory = new IlastikDetectorFactory()
     settings.detectorSettings = [
         'CLASSIFIER_FILEPATH': modelFile.absolutePath,
-        'TARGET_CHANNEL': targetchannel,
-        'CLASS_INDEX': classindex,
-        'PROBA_THRESHOLD': 0.5
-    ]
+        'TARGET_CHANNEL': targetchannel as int,
+        'CLASS_INDEX': classindex as int,
+        'PROBA_THRESHOLD': 0.25d
+    ] as Map
+    
+    println "Ilastik detector settings configured"
     return settings
 }
+
 def detectFociDoG(settings) {
+    println "Configuring DoG detector"
+    println "Spot diameter: ${spotDiameter}"
+    println "Target channel: ${targetchannel}"
+    println "Quality threshold: ${spotQuality}"
+    
     settings.detectorFactory = new DogDetectorFactory()
     settings.detectorSettings = [
         'DO_SUBPIXEL_LOCALIZATION': true,
-        'RADIUS': spotDiameter/2,  // in TrackMate GUI diameter is used for consistency
-        'TARGET_CHANNEL': targetchannel,
+        'RADIUS': spotDiameter/2,
+        'TARGET_CHANNEL': targetchannel as int,
         'THRESHOLD': spotQuality,
         'DO_MEDIAN_FILTERING': false
-    ]
+    ] as Map
+    
+    println "DoG detector settings configured"
     return settings
 }
+
+// Main execution
+println "Starting script execution"
+println "Total files to process: ${files.size()}"
 
 def imageN = 0
 def totalN = files.size()
 
 files.each { file ->
+    imageN++
+    println "Processing file ${imageN} of ${totalN}: ${file.name}"
+    
     IJ.showStatus("Detecting foci in image ${imageN} of a total of ${totalN}")
     IJ.showProgress(imageN, totalN)
     
     def filename = file.getName()
     def filenameParts = filename.split("\\.")
+    def baseFilename = filenameParts[0]
+    println "Base filename: ${baseFilename}"
     
     def imp = IJ.openImage(file.absolutePath)
-    imp.show()
-    trackFoci(outputFolder, filenameParts[0], imp, spotDetector)
+    if (imp == null) {
+        println "Failed to open image: ${file.absolutePath}"
+        return
+    }
+    
+    trackFoci(outputFolder, baseFilename, imp, spotDetector)
     
     imp.changes = false
     imp.close()
     
-    imageN++
+    println "Completed processing file ${imageN} of ${totalN}"
 }
+
+// Clean up ROI Manager
+def rm = RoiManager.getInstance()
+if (rm != null) {
+    rm.reset()
+    rm.close()
+}
+
+println "Script execution completed"
