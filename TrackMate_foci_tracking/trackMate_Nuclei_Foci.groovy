@@ -23,6 +23,10 @@
 #@ Integer (label="Maximum foci gap (frames)", value=1) maxGap
 #@ Double (label="Maximum gap closing distance (μm)", value=1.0) maxGapDistance
 
+//v2024.1.0
+// Maarten Paul, Erasmus MC
+// Tracking nuclei not fully functional at the moment; need to chage to work with groovy foci tracking script
+
 import ij.IJ
 import ij.ImagePlus
 import ij.WindowManager
@@ -59,7 +63,7 @@ import ij.plugin.ChannelSplitter
 import fiji.plugin.trackmate.visualization.table.TrackTableView
 
 
-// New method to read CSV once and return frame counts map
+// Method to read CSV once and return frame counts map
 def getFociCountsMap(File csvFile, int startFrame) {
     def frameCounts = [:]
     def lines = []
@@ -127,7 +131,7 @@ def getFociCountsMap(File csvFile, int startFrame) {
 }
 
 def runFociTracking(trackStackPath, fociOutputFolder, spotID) {
-    def scriptPath = "script:C:\\Fiji.app\\scripts\\My Plugins\\Ubuntu\\MP_TrackFoci_batch_Trackmate.py"
+    
     // def modelFolder = new File("C:\\")  // Default model folder path
     // def classIndex = 1  // Default class index for spot detection
     def command = String.format(Locale.US,
@@ -330,9 +334,9 @@ def processFile(file,trackFoci) {
         return
     }
        
-    def fociCollector = new FociDataCollector(
-        new File(fileOutputFolder, "detailed_foci.csv").absolutePath
-    )
+    //def fociCollector = new FociDataCollector(
+    //    new File(fileOutputFolder, "detailed_foci.csv").absolutePath
+    //)
     
     def model = new Model()
     model.setLogger(Logger.IJ_LOGGER)
@@ -378,13 +382,13 @@ def processFile(file,trackFoci) {
     def selectionModel = new SelectionModel(model)
     def ds = DisplaySettingsIO.readUserDefault()
     
-    // Save label image
-   // def labelImp = LabelImgExporter.createLabelImagePlus(trackmate, false, true, 
-   //                LabelImgExporter.LabelIdPainting.LABEL_IS_TRACK_ID)
-   // labelImp.show()
-   // IJ.run(labelImp, "Size...", "width=${imp.width} height=${imp.height} constrain interpolation=None")
-   // IJ.saveAsTiff(labelImp, new File(fileOutputFolder, "labelmap.tif").absolutePath)
-   // labelImp.close()
+    // Save label image with trackIDs
+    def labelImp = LabelImgExporter.createLabelImagePlus(trackmate, false, true, 
+                  LabelImgExporter.LabelIdPainting.LABEL_IS_TRACK_ID)
+    labelImp.show()
+    IJ.run(labelImp, "Size...", "width=${imp.width} height=${imp.height} constrain interpolation=None")
+    IJ.saveAsTiff(labelImp, new File(fileOutputFolder, "nuclei_labelmap.tif").absolutePath)
+    labelImp.close()
     
     // Project tracks on original image
     imp.show()
@@ -501,7 +505,7 @@ def processFile(file,trackFoci) {
         if (rm.getCount() > 0) {
             rm.runCommand("Select All")
             def movieName = file.getName().take(file.getName().lastIndexOf('.'))
-            def roiZipPath = new File(fileOutputFolder, "${movieName}_AllROIs.zip")
+            def roiZipPath = new File(fileOutputFolder, "nuclei_ROIs.zip")
             rm.runCommand("Save", roiZipPath.absolutePath)
         }
         rm.reset()
@@ -511,15 +515,15 @@ def processFile(file,trackFoci) {
 
     // Continue with table exports
     def spotTable = TrackTableView.createSpotTable(model, ds)
-    spotTable.exportToCsv(new File(fileOutputFolder, "all_track_spots.csv"))
+    spotTable.exportToCsv(new File(fileOutputFolder, "nuclei_track_spots.csv"))
     
 	def only_visible = false
 	// If you set this flag to False, it will include all the spots,
 	// the ones not in tracks, and the ones not visible.
-	CSVExporter.exportSpots( new File(fileOutputFolder, "all_nuclei_spots.csv").absolutePath, model, only_visible )
+	CSVExporter.exportSpots( new File(fileOutputFolder, "nuclei_unfiltered_spots.csv").absolutePath, model, only_visible )
 
     def trackTable = TrackTableView.createTrackTable(model, ds)
-    trackTable.exportToCsv(new File(fileOutputFolder, "all_nuclei_tracks.csv"))
+    trackTable.exportToCsv(new File(fileOutputFolder, "nuclei_tracks.csv"))
 	if (trackFoci) {
     // Save results
     	rt.save(new File(fileOutputFolder, "combined_results.csv").absolutePath)
@@ -539,7 +543,7 @@ def processFile(file,trackFoci) {
     } catch (Exception e) {
         logError("Error saving combined ROIs: ${e.message}")
     }
-    def outFile_TMXML = new File(fileOutputFolder, "nuclei_XML.xml")
+    def outFile_TMXML = new File(fileOutputFolder, "nuclei_trackmate.xml")
 	def writer = new TmXmlWriter(outFile_TMXML) //a File path object
 	writer.appendModel(trackmate.getModel()) //trackmate instantiate like this before trackmate = TrackMate(model, settings)
 	writer.appendSettings(trackmate.getSettings())

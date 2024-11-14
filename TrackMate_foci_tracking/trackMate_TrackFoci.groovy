@@ -14,6 +14,10 @@
 //@ Integer(label="Maximum Gap (frames)",value=1) maxGap
 //@ Double(label="Linking Max Distance (um)",value=1.0) maxGapDistance
 
+//v2024.1.0
+// Maarten Paul, Erasmus MC
+
+
 // ImageJ imports
 import ij.IJ
 import ij.WindowManager
@@ -33,6 +37,7 @@ import fiji.plugin.trackmate.TrackMate
 import fiji.plugin.trackmate.SelectionModel
 import fiji.plugin.trackmate.Logger
 import fiji.plugin.trackmate.io.TmXmlWriter
+import fiji.plugin.trackmate.io.CSVExporter
 import fiji.plugin.trackmate.detection.DogDetectorFactory
 import fiji.plugin.trackmate.tracking.jaqaman.LAPUtils
 import fiji.plugin.trackmate.tracking.jaqaman.SparseLAPTrackerFactory
@@ -44,11 +49,12 @@ import fiji.plugin.trackmate.visualization.hyperstack.HyperStackDisplayer
 import fiji.plugin.trackmate.features.FeatureFilter
 import fiji.plugin.trackmate.action.IJRoiExporter
 import fiji.plugin.trackmate.action.ExportTracksToXML
+import fiji.plugin.trackmate.visualization.table.TrackTableView
 
 def trackFoci(outputFolder, filename, imp, spotDetector) {
     println "Starting trackFoci for file: $filename"
-    def outFile = new File(outputFolder, filename + "exportTracks.xml")
-    
+    fileOutputFolder = new File(outputFolder,filename)
+    fileOutputFolder.mkdirs()
     // Create the model object
     def model = new Model()
     model.setLogger(Logger.IJ_LOGGER)
@@ -99,6 +105,7 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
     
     // Create selection model
     def selectionModel = new SelectionModel(model)
+    def ds = DisplaySettingsIO.readUserDefault()
     
     // Process results
     def rt = new ResultsTable()
@@ -133,16 +140,30 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
     }
     
     // Save results
-    def rt_file = new File(outputFolder, filename + "FociTracks.txt")
+    def rt_file = new File(fileOutputFolder, filename + "FociTracks.txt")
     rt.save(rt_file.absolutePath)
     rt.reset()
     
+    
+    
+     // Continue with table exports
+    def spotTable = TrackTableView.createSpotTable(model, ds)
+    spotTable.exportToCsv(new File(fileOutputFolder, "foci_track_spots.csv"))
+    
+	def only_visible = false
+	// If you set this flag to False, it will include all the spots,
+	// the ones not in tracks, and the ones not visible.
+	CSVExporter.exportSpots( new File(fileOutputFolder, "foci_unfiltered_spots.csv").absolutePath, model, only_visible )
+
+    def trackTable = TrackTableView.createTrackTable(model, ds)
+    trackTable.exportToCsv(new File(fileOutputFolder, "foci_tracks.csv"))
+    
     // Save TrackMate XML
-    def outFile_TMXML = new File(outputFolder, filename + "exportFociXML.xml")
-    def writer = new TmXmlWriter(outFile_TMXML)
-    writer.appendModel(trackmate.getModel())
-    writer.appendSettings(trackmate.getSettings())
-    writer.writeToFile()
+    def outFile_TMXML = new File(fileOutputFolder, "foci_trackmate.xml")
+	def writer = new TmXmlWriter(outFile_TMXML) //a File path object
+	writer.appendModel(trackmate.getModel()) //trackmate instantiate like this before trackmate = TrackMate(model, settings)
+	writer.appendSettings(trackmate.getSettings())
+	writer.writeToFile()
     
     // Handle ROIs
     def rm = RoiManager.getInstance() ?: new RoiManager()
@@ -153,7 +174,7 @@ def trackFoci(outputFolder, filename, imp, spotDetector) {
     exporter.export(spots)
     rm = RoiManager.getInstance()
     rm.runCommand("Select All")
-    def roi_name = new File(outputFolder, filename + "FociROI.zip")
+    def roi_name = new File(fileOutputFolder, "foci_ROIs.zip")
     rm.runCommand("Save", roi_name.absolutePath)
     
     println "Completed processing for file: $filename"
@@ -220,7 +241,7 @@ files.each { file ->
         println "Failed to open image: ${file.absolutePath}"
         return
     }
-    
+    imp.show()
     trackFoci(outputFolder, baseFilename, imp, spotDetector)
     
     imp.changes = false
