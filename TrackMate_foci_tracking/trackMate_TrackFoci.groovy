@@ -191,7 +191,7 @@ def detectFociIlastik(settings) {
         'CLASSIFIER_FILEPATH': modelFile.absolutePath,
         'TARGET_CHANNEL': targetchannel as int,
         'CLASS_INDEX': classindex as int,
-        'PROBA_THRESHOLD': 0.25d
+        'PROBA_THRESHOLD': 0.3d
     ] as Map
     
     println "Ilastik detector settings configured"

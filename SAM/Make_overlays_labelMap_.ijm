@@ -1,6 +1,9 @@
 #@ File (label = "Input directory", style = "directory") input
 #@ String (label = "File suffix", value = ".tif") suffix
-
+#@ String (label = "training data", value = "_") dataset
+//updated to work with adjusted labelmap output for comparison between different trainingsets
+//for making overlays for the training on all sensitive data use "labelIm__" if overlays need to be
+//made on 
 function processFolder(input) {
     list = getFileList(input);
     for (i = 0; i < list.length; i++) {
@@ -13,11 +16,11 @@ function processFolder(input) {
 
 function processFile(input, file) {
     // Check if it's an original image file
-    if (indexOf(file, "labelIm_") < 0) {
+    if (indexOf(file, "labelIm_"+dataset) < 0) {
         print("Processing: " + input + File.separator + file);
         
         // Construct label map filename
-        labelFile = "labelIm_" + file;
+        labelFile = "labelIm_"+dataset + file;
         
         // Check if label map exists
         if (File.exists(input + File.separator + labelFile)) {
@@ -34,7 +37,7 @@ function processFile(input, file) {
             
             // Save ROIs as zip file
             roiManager("Deselect");
-            roiManager("Save", input + File.separator + file + "_ROIs.zip");
+            roiManager("Save", input + File.separator + file  +dataset+"ROIs.zip");
             
             // Switch to original image
             selectImage(originalID);
@@ -44,7 +47,7 @@ function processFile(input, file) {
             run("Flatten");
             
             // Save image with overlay
-            saveAs("Tiff", input + File.separator + file + "_with_overlay.tif");
+            saveAs("Tiff", input + File.separator + file  +dataset + "with_overlay.tif");
             
             // Close all images
             close("*");
