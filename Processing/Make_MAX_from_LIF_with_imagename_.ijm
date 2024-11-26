@@ -28,7 +28,10 @@ for (fileIndex = 0; fileIndex < files.length; fileIndex++) {
         for (series = 0; series < seriesCount; series++) {
             run("Bio-Formats Importer", "open=[" + path + "] autoscale color_mode=Default rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT series_" + (series + 1));
             
-            // Get the title of the current image
+			getDimensions(width, height, channels, slices, frames);
+			if (slices==1){
+				continue;
+			}
             // Get the title of the current image
 			title = getTitle();
 			subTitle = split(title, " - ");
