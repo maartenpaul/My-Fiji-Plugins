@@ -1,11 +1,117 @@
 #2024 tracking script
 #This script is used to import tracking data from TrackMate and plot the data.
 #version 2024.11.01
-# Maarten Paul 
-# TO DO
-# Include the labelmask tiff to pick up foci from the segmented nuclei only
 
 library(tidyverse)
+library(RBioFormats)
+library(future)
+library(furrr)
+
+# Global parameters
+PIXEL_SIZE <- 0.12  # μm per pixel
+
+match_foci_to_nuclei <- function(foci_data, labelmap_path, n_cores = 4) {
+  # Set up parallel processing
+  plan(multisession, workers = n_cores)
+  
+  # Ensure proper data types and convert coordinates to pixels
+  foci_data <- foci_data %>%
+    mutate(
+      Frame = as.numeric(Frame),
+      X = as.numeric(X),
+      Y = as.numeric(Y),
+      X_px = X / PIXEL_SIZE,
+      Y_px = Y / PIXEL_SIZE
+    ) %>%
+    filter(!is.na(Frame), !is.na(X), !is.na(Y))
+  
+  # Read image metadata
+  message("Reading labelmap metadata...")
+  img_meta <- read.metadata(labelmap_path)
+  n_frames <- img_meta$coreMetadata$sizeT
+  height <- img_meta$coreMetadata$sizeY
+  width <- img_meta$coreMetadata$sizeX
+  
+  message(sprintf("Image dimensions: %d x %d pixels", width, height))
+  message(sprintf("Coordinate ranges in pixels: X: %.1f to %.1f, Y: %.1f to %.1f", 
+                  min(foci_data$X_px), max(foci_data$X_px),
+                  min(foci_data$Y_px), max(foci_data$Y_px)))
+  
+  # Process frames in parallel
+  foci_with_nuclei <- future_map_dfr(sort(unique(foci_data$Frame)), function(current_frame) {
+    message(sprintf("Processing frame %d", current_frame))
+    
+    # Get data for current frame
+    frame_data <- foci_data %>% filter(Frame == current_frame)
+    
+    # Read image frame
+    img_frame <- read.image(labelmap_path, subset = list(T = current_frame + 1),,normalize=FALSE)
+    
+    # Convert coordinates to pixels and ensure they're within bounds
+    x_coords <- pmin(pmax(round(frame_data$X_px), 1), width)
+    y_coords <- pmin(pmax(round(frame_data$Y_px), 1), height)
+    
+    # Get nucleus IDs
+    frame_data$nucleus_id <- as.numeric(img_frame[cbind(x_coords, y_coords)])
+    
+    return(frame_data)
+  }, .progress = TRUE)
+  
+  return(foci_with_nuclei)
+}
+
+# Modify process_folders to include labelmap processing
+process_folders <- function(root_folder) {
+  # Find all folders containing the required files
+  folders <- list.dirs(root_folder, recursive = TRUE)
+  folders <- folders[file.exists(file.path(folders, "foci_unfiltered_spots.csv")) & 
+                       file.exists(file.path(folders, "nuclei_unfiltered_spots.csv")) &
+                       file.exists(file.path(folders, "nuclei_labelmap.tif"))]
+  
+  # Process foci data with labelmap matching
+  foci_data <- map_df(folders, function(folder) {
+    folder_name <- basename(folder)
+    metadata <- parse_folder_name(folder_name)
+    
+    # Import spots
+    foci <- import_trackmate(file.path(folder, "foci_unfiltered_spots.csv")) %>%
+      mutate(
+        movie = metadata$movie,
+        cell_line = metadata$cell_line,
+        marker = metadata$marker,
+        clone = metadata$clone,
+        condition = metadata$condition,
+        T_h = T/3600
+      )
+    
+    # Match with nuclei using labelmap
+    foci_with_nuclei <- match_foci_to_nuclei(
+      foci,
+      file.path(folder, "nuclei_labelmap.tif")
+    )
+    
+    return(foci_with_nuclei)
+  })
+  
+  # Process nuclei data (unchanged)
+  nuclei_data <- map_df(folders, function(folder) {
+    folder_name <- basename(folder)
+    metadata <- parse_folder_name(folder_name)
+    
+    import_trackmate(file.path(folder, "nuclei_unfiltered_spots.csv")) %>%
+      mutate(
+        movie = metadata$movie,
+        cell_line = metadata$cell_line,
+        marker = metadata$marker,
+        clone = metadata$clone,
+        condition = metadata$condition,
+        T_h = T/3600
+      )
+  })
+  
+  return(list(foci = foci_data, nuclei = nuclei_data))
+}
+
 import_trackmate <- function(file_path) {
   # Read everything as character first
   headers <- read_csv(file_path, 
@@ -55,56 +161,20 @@ parse_folder_name <- function(folder_name) {
     cell_line = parts[3],
     marker = parts[4],
     clone = parts[5],
-    condition = if(length(parts) > 5) parts[6] else NA
+    condition = if(length(parts) > 5) parts[6] else "IR"
   )
   return(metadata)
-}
-
-
-process_folders <- function(root_folder) {
-  # Find all folders containing the required files
-  folders <- list.dirs(root_folder, recursive = TRUE)
-  folders <- folders[file.exists(file.path(folders, "foci_unfiltered_spots.csv")) & 
-                       file.exists(file.path(folders, "nuclei_unfiltered_spots.csv"))]
-  
-  # Process foci data
-  foci_data <- map_df(folders, function(folder) {
-    folder_name <- basename(folder)
-    metadata <- parse_folder_name(folder_name)
-    
-    import_trackmate(file.path(folder, "foci_unfiltered_spots.csv")) %>%
-      mutate(
-        movie = metadata$movie,
-        cell_line = metadata$cell_line,
-        marker = metadata$marker,
-        clone = metadata$clone,
-        condition = metadata$condition,
-        T_h = T/3600
-      )
-  })
-  
-  # Process nuclei data
-  nuclei_data <- map_df(folders, function(folder) {
-    folder_name <- basename(folder)
-    metadata <- parse_folder_name(folder_name)
-    
-    import_trackmate(file.path(folder, "nuclei_unfiltered_spots.csv")) %>%
-      mutate(
-        movie = metadata$movie,
-        cell_line = metadata$cell_line,
-        marker = metadata$marker,
-        clone = metadata$clone,
-        condition = metadata$condition,
-        T_h = T/3600
-      )
-  })
-  
-  return(list(foci = foci_data, nuclei = nuclei_data))
 }
 
 # Process all files
 root_folder <- "C:/Users/maart/OneDrive/Data2/241011_Timelapse_mSG-R51/MAX"
 tracking_data <- process_folders(root_folder)
+
+tracking_data$foci %>%
+  filter(movie=="001", clone=="B3",condition=="IR", Frame==15,nucleus_id>0)%>%
+  ggplot(aes(x = X, y = Y, color = nucleus_id)) +
+  geom_point()
+library(plotly)
 
 plot_tracking_metric <- function(data, metric_col, y_label, plot_title) {
   data %>%
@@ -124,6 +194,7 @@ plot_tracking_metric <- function(data, metric_col, y_label, plot_title) {
 
 # Calculate and plot foci per nucleus
 p1 <- tracking_data$foci %>%
+  filter(nucleus_id>0)%>%
   group_by(Frame, movie, cell_line, marker, clone, condition) %>%
   summarize(foci_count = n(), .groups = 'keep') %>%
   left_join(
@@ -143,6 +214,7 @@ p1 <- tracking_data$foci %>%
        title = "Foci per nucleus over time") +
   theme_minimal()
 
+p1
 # Plot mean area
 p2 <- plot_tracking_metric(tracking_data$foci, 
                            "Area", 
@@ -159,4 +231,4 @@ p3 <- plot_tracking_metric(tracking_data$foci,
 p1
 p2
 p3
-
+ 
